@@ -80,3 +80,91 @@ impl DisjointSet {
         self.parents.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Members in a fixed order, so groups compare regardless of union order
+    fn sorted_members(disjoint_set: &DisjointSet, id: usize) -> Vec<usize> {
+        let mut members = disjoint_set.members_of(id).to_vec();
+        members.sort();
+        members
+    }
+
+    #[test]
+    fn every_element_starts_in_its_own_group() {
+        let disjoint_set = DisjointSet::with_len(3);
+
+        assert_eq!(disjoint_set.get_roots(), [0, 1, 2]);
+        for id in 0..3 {
+            assert_eq!(disjoint_set.members_of(id), [id]);
+        }
+    }
+
+    #[test]
+    fn union_is_transitive() {
+        // 0-1 and 1-2 are linked, 0-2 never is
+        let mut disjoint_set = DisjointSet::with_len(4);
+        disjoint_set.union(0, 1);
+        disjoint_set.union(1, 2);
+
+        assert!(disjoint_set.in_same_group(0, 2));
+        assert!(!disjoint_set.in_same_group(0, 3));
+        assert_eq!(disjoint_set.get_roots().len(), 2);
+    }
+
+    #[test]
+    fn repeated_and_self_unions_change_nothing() {
+        let mut disjoint_set = DisjointSet::with_len(3);
+        disjoint_set.union(0, 0);
+        assert_eq!(disjoint_set.get_roots(), [0, 1, 2]);
+
+        // Both directions, twice: a member moved more than once would show up as a duplicate
+        disjoint_set.union(0, 1);
+        disjoint_set.union(1, 0);
+        disjoint_set.union(0, 1);
+
+        assert_eq!(sorted_members(&disjoint_set, 0), [0, 1]);
+        assert_eq!(disjoint_set.get_roots().len(), 2);
+    }
+
+    #[test]
+    fn members_are_the_same_from_any_member() {
+        let mut disjoint_set = DisjointSet::with_len(5);
+        disjoint_set.union(3, 1);
+        disjoint_set.union(4, 3);
+
+        for id in [1, 3, 4] {
+            assert_eq!(sorted_members(&disjoint_set, id), [1, 3, 4], "from {id}");
+        }
+        assert_eq!(sorted_members(&disjoint_set, 0), [0]);
+        assert_eq!(sorted_members(&disjoint_set, 2), [2]);
+    }
+
+    #[test]
+    fn deep_tree_ends_in_one_group() {
+        // Union by size keeps a one-at-a-time chain flat, so merge equal-sized groups in rounds
+        // instead: each round adds a level, giving a tree 10 deep that path splitting must
+        // shorten without losing anyone
+        let len = 1 << 10;
+        let mut disjoint_set = DisjointSet::with_len(len);
+        let mut step = 1;
+        while step < len {
+            for id in (0..len).step_by(2 * step) {
+                disjoint_set.union(id, id + step);
+            }
+            step *= 2;
+        }
+
+        let root = disjoint_set.root_of(len - 1);
+        for id in 0..len {
+            assert_eq!(disjoint_set.root_of(id), root, "root of {id}");
+        }
+        assert_eq!(disjoint_set.get_roots(), [root]);
+        assert_eq!(
+            sorted_members(&disjoint_set, 0),
+            (0..len).collect::<Vec<_>>()
+        );
+    }
+}

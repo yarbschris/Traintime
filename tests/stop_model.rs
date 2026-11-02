@@ -252,6 +252,111 @@ trip_2,62N
     );
 }
 
+// Grouping by transfer and name
+
+#[test]
+fn chain_of_same_name_transfers_is_one_station() {
+    // A-B and B-C are linked, A-C is not: the parent x parent scan this replaced missed that.
+    // D shares the name with no transfer, so it stays separate and both get a route qualifier.
+    // The transfers list B-C first, so the result can't depend on reading them in stop order.
+    let stops = "\
+stop_id,stop_name,location_type,parent_station
+A,Hub,1,
+AN,Hub,,A
+B,Hub,1,
+BN,Hub,,B
+C,Hub,1,
+CN,Hub,,C
+D,Hub,1,
+DN,Hub,,D
+";
+    let transfers = "\
+from_stop_id,to_stop_id,transfer_type
+C,B,2
+B,C,2
+B,A,2
+A,B,2
+";
+    let stop_times = "\
+trip_id,stop_id
+trip_1,AN
+trip_2,BN
+trip_3,CN
+trip_4,DN
+";
+    let static_data = build_feed(stops, Some(transfers), stop_times).expect("feed should build");
+
+    assert_eq!(
+        labels(&static_data),
+        BTreeMap::from([
+            ("AN", "Hub (1, 2, 3)"),
+            ("BN", "Hub (1, 2, 3)"),
+            ("CN", "Hub (1, 2, 3)"),
+            ("DN", "Hub (4)"),
+        ])
+    );
+    assert_eq!(sorted_routes(&static_data, "Hub (1, 2, 3)"), ["1", "2", "3"]);
+}
+
+#[test]
+fn one_way_transfer_merges_same_name_stations() {
+    // Feeds don't always list the return transfer
+    let stops = "\
+stop_id,stop_name,location_type,parent_station
+11,Junction,1,
+11N,Junction,,11
+12,Junction,1,
+12N,Junction,,12
+";
+    let transfers = "\
+from_stop_id,to_stop_id,transfer_type
+11,12,2
+";
+    let stop_times = "\
+trip_id,stop_id
+trip_1,11N
+trip_2,12N
+";
+    let static_data = build_feed(stops, Some(transfers), stop_times).expect("feed should build");
+
+    assert_eq!(
+        labels(&static_data),
+        BTreeMap::from([("11N", "Junction"), ("12N", "Junction")])
+    );
+    assert_eq!(sorted_routes(&static_data, "Junction"), ["1", "2"]);
+}
+
+#[test]
+fn differently_named_stations_with_a_transfer_stay_separate() {
+    // NYC's Park Place / Chambers St: one complex, but a rider searching one name wants only
+    // that station's platforms. Merged, both platforms would carry one arbitrary name.
+    let stops = "\
+stop_id,stop_name,location_type,parent_station
+21,Park Place,1,
+21N,Park Place,,21
+22,Chambers St,1,
+22N,Chambers St,,22
+";
+    let transfers = "\
+from_stop_id,to_stop_id,transfer_type
+21,22,2
+22,21,2
+";
+    let stop_times = "\
+trip_id,stop_id
+trip_1,21N
+trip_2,22N
+";
+    let static_data = build_feed(stops, Some(transfers), stop_times).expect("feed should build");
+
+    assert_eq!(
+        labels(&static_data),
+        BTreeMap::from([("21N", "Park Place"), ("22N", "Chambers St")])
+    );
+    assert_eq!(sorted_routes(&static_data, "Park Place"), ["1"]);
+    assert_eq!(sorted_routes(&static_data, "Chambers St"), ["2"]);
+}
+
 // Standalone stops
 
 #[test]
