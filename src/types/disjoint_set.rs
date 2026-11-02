@@ -76,20 +76,7 @@ impl DisjointSet {
         }
     }
 
-    pub fn new() -> Self {
-        Self {
-            parents: Vec::new(),
-            members_of: Vec::new(),
-        }
-    }
-
     fn len(&self) -> usize {
         self.parents.len()
-    }
-}
-
-impl Default for DisjointSet {
-    fn default() -> Self {
-        Self::new()
     }
 }

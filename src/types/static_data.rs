@@ -246,24 +246,21 @@ fn build_station_groups(
 
         let member_ids = disjoint_set.members_of(root);
         for &member_id in member_ids {
-            if disjoint_set.in_same_group(member_id, root) {
-                let Some(member_stop) = parent_stops.get(member_id) else {
-                    error!("internal disjoint set error: id {member_id} is invalid");
-                    continue;
-                };
-                match member_stop.location_type {
-                    LocationType::Stop => {
-                        standalone_map.insert(member_stop.stop_id.clone(), group_index);
-                    }
-                    LocationType::Station => {
-                        station_map.insert(member_stop.stop_id.clone(), group_index);
-                    }
-                    _ => {}
+            let Some(member_stop) = parent_stops.get(member_id) else {
+                error!("internal disjoint set error: id {member_id} is invalid");
+                continue;
+            };
+            match member_stop.location_type {
+                LocationType::Stop => {
+                    standalone_map.insert(member_stop.stop_id.clone(), group_index);
                 }
+                LocationType::Station => {
+                    station_map.insert(member_stop.stop_id.clone(), group_index);
+                }
+                _ => {}
             }
         }
     }
-    dbg!(station_groups.len());
     (station_groups, station_map, standalone_map)
 }
 

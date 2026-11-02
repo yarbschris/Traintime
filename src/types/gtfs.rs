@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, serde::Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, serde::Deserialize)]
 pub struct Stop {
     pub stop_id: StopID,
     pub stop_name: StationName,
