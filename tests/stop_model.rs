@@ -1,11 +1,11 @@
 use prost::bytes::Bytes;
-use server::config::SupportedTransitSystem;
-use server::error::GtfsStaticError;
-use server::types::generation::Generation;
-use server::types::gtfs::{LocationType, TransferType};
-use server::types::static_data::StaticData;
 use std::collections::BTreeMap;
 use std::io::{Cursor, Write};
+use traintime_server::config::SupportedTransitSystem;
+use traintime_server::error::GtfsStaticError;
+use traintime_server::types::generation::Generation;
+use traintime_server::types::gtfs::{LocationType, TransferType};
+use traintime_server::types::static_data::StaticData;
 use zip::write::SimpleFileOptions;
 
 // Feeds are built in memory so each test shows the rows it depends on. One trip per route:
@@ -295,7 +295,10 @@ trip_4,DN
             ("DN", "Hub (4)"),
         ])
     );
-    assert_eq!(sorted_routes(&static_data, "Hub (1, 2, 3)"), ["1", "2", "3"]);
+    assert_eq!(
+        sorted_routes(&static_data, "Hub (1, 2, 3)"),
+        ["1", "2", "3"]
+    );
 }
 
 #[test]

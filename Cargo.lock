@@ -1873,26 +1873,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "colog",
- "csv",
- "futures",
- "gtfs_rt_decode",
- "itertools 0.15.0",
- "log",
- "pico-args",
- "postcard",
- "prost",
- "reqwest",
- "serde",
- "serde_norway",
- "tokio",
- "zip",
-]
-
-[[package]]
 name = "sha1"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2249,6 +2229,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "traintime_server"
+version = "0.1.0"
+dependencies = [
+ "colog",
+ "csv",
+ "futures",
+ "gtfs_rt_decode",
+ "itertools 0.15.0",
+ "log",
+ "pico-args",
+ "postcard",
+ "prost",
+ "reqwest",
+ "serde",
+ "serde_norway",
+ "tokio",
+ "zip",
 ]
 
 [[package]]

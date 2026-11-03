@@ -1,5 +1,5 @@
-use server::config::{Selection, SupportedTransitSystem};
-use server::types::gtfs::StationName;
+use traintime_server::config::{Selection, SupportedTransitSystem};
+use traintime_server::types::gtfs::StationName;
 
 const HELP: &str = "\
 Traintime CLI

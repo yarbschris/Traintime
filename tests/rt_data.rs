@@ -1,11 +1,13 @@
 use gtfs_rt_decode::gtfs_rt_types::{FeedEntity, FeedMessage};
 use prost::bytes::Bytes;
-use server::config::{ResolvedSystemConfig, SupportedTransitSystem, get_stop_ids_by_station_name};
-use server::rt_funcs::decode_gtfs_rt;
-use server::types::gtfs::{StationName, StopID};
-use server::types::static_data::StaticData;
-use server::types::traintime_packet::{TraintimePacket, feed_entity_to_packet};
 use std::collections::{BTreeMap, BTreeSet};
+use traintime_server::config::{
+    ResolvedSystemConfig, SupportedTransitSystem, get_stop_ids_by_station_name,
+};
+use traintime_server::rt_funcs::decode_gtfs_rt;
+use traintime_server::types::gtfs::{StationName, StopID};
+use traintime_server::types::static_data::StaticData;
+use traintime_server::types::traintime_packet::{TraintimePacket, feed_entity_to_packet};
 
 // Recorded from the MTA 1/2/3/4/5/6/7/S endpoint on 2026-10-07. Frozen, do not regenerate: every
 // count and arrival time below is specific to this recording.

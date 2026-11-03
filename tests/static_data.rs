@@ -1,11 +1,11 @@
 use prost::bytes::Bytes;
 use reqwest::header::HeaderValue;
-use server::config::{SupportedTransitSystem, get_stop_ids_by_station_name};
-use server::error::{GtfsStaticError, StationResolveError};
-use server::static_funcs::should_skip_update;
-use server::types::generation::Generation;
-use server::types::gtfs::{StationName, StopID};
-use server::types::static_data::StaticData;
+use traintime_server::config::{SupportedTransitSystem, get_stop_ids_by_station_name};
+use traintime_server::error::{GtfsStaticError, StationResolveError};
+use traintime_server::static_funcs::should_skip_update;
+use traintime_server::types::generation::Generation;
+use traintime_server::types::gtfs::{StationName, StopID};
+use traintime_server::types::static_data::StaticData;
 
 // Hand-written feed, see test_data/*.txt for the sources. Regenerate from test_data/ with:
 // zip -X gtfs_static.zip stops.txt transfers.txt trips.txt stop_times.txt

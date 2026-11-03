@@ -1,7 +1,7 @@
 use log::error;
-use server::types::{status::ServerStatus, traintime_packet::TraintimePacket};
 use std::collections::BTreeSet;
 use std::process::exit;
+use traintime_server::types::{status::ServerStatus, traintime_packet::TraintimePacket};
 mod cli;
 
 #[tokio::main]
@@ -17,7 +17,7 @@ async fn main() {
     };
 
     let (mut rx_traintime_packets, tx_selection, rx_server_status, mut rx_static_data) =
-        server::start(None).await.unwrap();
+        traintime_server::start(None).await.unwrap();
 
     tokio::spawn(receive_status(rx_server_status));
 
