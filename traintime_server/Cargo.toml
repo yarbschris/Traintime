@@ -11,10 +11,8 @@ gtfs_rt_decode = "0.1.2"
 prost = "0.14.4"
 csv = "1.4.0"
 serde = { version = "1.0.229", features = ["derive", "std"] }
-zip = "8.6.0"
+zip = "9.3.0"
 itertools = "0.15.0"
 futures = "0.3.34"
 serde_norway = "0.9.42"
 log = { version = "0.4.34", features = ["kv"] }
-colog = "1.4.0"
-pico-args = "0.5.0"

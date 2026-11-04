@@ -1,0 +1,11 @@
+[package]
+name = "traintime_cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+traintime_server = { path = "../traintime_server", version = "0.1.0" }
+log = { version = "0.4.34", features = ["kv"] }
+colog = "1.4.0"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"]}
+pico-args = "0.5.0"
