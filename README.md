@@ -42,7 +42,7 @@ This is a Cargo workspace with two crates:
 | Crate              | What it is                                                                                               |
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
 | `traintime_server` | The library: static and realtime data pipelines, station resolution, and the channels clients listen on. |
-| `traintime_cli`    | A terminal client that selects a station and prints arrivals as they update.                             |
+| `traintime_cli`    | An interactive terminal UI for picking a station and watching its arrivals board.                        |
 
 ## Getting started
 
@@ -62,35 +62,29 @@ cargo test
 
 ### Run the CLI
 
-List the supported systems:
+`traintime_cli` is an interactive terminal UI. Start it with no arguments to
+pick a system, then filter and pick a station, then watch its arrivals board
+update:
 
 ```sh
-cargo run -p traintime_cli -- --list-systems
+cargo run -p traintime_cli
 ```
 
-List the stations in a system. This downloads the system's static schedule,
-so the first run takes a moment:
+Choosing a system downloads its static schedule, so the station list takes a
+moment to appear the first time. Press `?` for key bindings, `l` to show the
+server's log, and `q` to quit.
 
-```sh
-cargo run -p traintime_cli -- --list-stations NycSubway
-```
-
-Show live arrivals for a station:
+To skip straight to a station's board:
 
 ```sh
 cargo run -p traintime_cli -- --system NycSubway --station "East Broadway"
 ```
 
-The CLI prints the server's status and then each new set of arrivals, with
-the soonest train last, just above your prompt.
-
-| Flag                           | Description                                 |
-| ------------------------------ | ------------------------------------------- |
-| `-t`, `--system SYSTEM`        | Transit system to use                       |
-| `-s`, `--station STATION`      | Station name, as shown by `--list-stations` |
-| `-L`, `--list-stations SYSTEM` | List the stations in a system and exit      |
-| `-l`, `--list-systems`         | List the supported systems and exit         |
-| `-h`, `--help`                 | Show help                                   |
+| Flag                      | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `-t`, `--system SYSTEM`   | Start on a system                             |
+| `-s`, `--station STATION` | Start on a station's board (needs `--system`) |
+| `-h`, `--help`            | Show help                                     |
 
 ## How it works
 
@@ -138,7 +132,7 @@ server works unchanged when it moves to the Pi and the link becomes the Pi's
 GPIO UART.
 
 The Pico's display drivers are written from scratch: first an SPI display,
-then the HUB75 panel driven through the RP2040's PIO blocks and DMA.
+then the HUB75 panel driven through the RP2350's PIO blocks and DMA.
 
 ## Roadmap
 
