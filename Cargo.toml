@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["traintime_cli","traintime_server"]
+members = ["protocol","traintime_cli","traintime_server"]
