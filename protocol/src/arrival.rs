@@ -77,6 +77,10 @@ impl Arrival {
     /// The route ID as the feed gives it (e.g. `"6X"`), at most
     /// [`MAX_ROUTE_ID_LEN`] bytes. The layout uses it to pick the route's
     /// bullet and color.
+    ///
+    /// May be empty, if the feed sent an empty route ID. That's deliberate:
+    /// the arrival is still worth showing, and how to draw a missing route is
+    /// the layout's decision.
     pub fn route_id(&self) -> &str {
         &self.route_id
     }
@@ -109,4 +113,84 @@ impl Arrival {
 pub enum ArrivalError {
     /// The route ID is longer than [`MAX_ROUTE_ID_LEN`] bytes.
     RouteIdTooLong,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn headsign_at_limit_is_kept_whole() {
+        let headsign = "a".repeat(MAX_HEADSIGN_LEN);
+
+        let arrival = Arrival::new("6", &headsign, 4, None).unwrap();
+
+        assert_eq!(arrival.headsign(), headsign);
+    }
+
+    #[test]
+    fn headsign_over_limit_is_truncated_to_limit() {
+        let headsign = "a".repeat(MAX_HEADSIGN_LEN + 1);
+
+        let arrival = Arrival::new("6", &headsign, 4, None).unwrap();
+
+        assert_eq!(arrival.headsign(), &headsign[..MAX_HEADSIGN_LEN]);
+    }
+
+    #[test]
+    fn headsign_is_truncated_on_a_char_boundary() {
+        // "é" is 2 bytes, so it would straddle the limit: bytes 63 and 64.
+        let headsign = "a".repeat(MAX_HEADSIGN_LEN - 1) + "é";
+        assert_eq!(headsign.len(), MAX_HEADSIGN_LEN + 1);
+
+        let arrival = Arrival::new("6", &headsign, 4, None).unwrap();
+
+        assert_eq!(arrival.headsign(), "a".repeat(MAX_HEADSIGN_LEN - 1));
+        assert_eq!(arrival.headsign().len(), MAX_HEADSIGN_LEN - 1);
+    }
+
+    #[test]
+    fn route_id_at_limit_is_accepted() {
+        let route_id = "R".repeat(MAX_ROUTE_ID_LEN);
+
+        let arrival = Arrival::new(&route_id, "Pelham Bay Park", 4, None).unwrap();
+
+        assert_eq!(arrival.route_id(), route_id);
+    }
+
+    #[test]
+    fn route_id_over_limit_is_rejected() {
+        let route_id = "R".repeat(MAX_ROUTE_ID_LEN + 1);
+
+        let result = Arrival::new(&route_id, "Pelham Bay Park", 4, None);
+
+        assert_eq!(result, Err(ArrivalError::RouteIdTooLong));
+    }
+
+    #[test]
+    fn empty_route_id_is_accepted() {
+        // Deliberate: see `Arrival::route_id`. The layout handles a missing
+        // route; `new` must not reject it.
+        let arrival = Arrival::new("", "Pelham Bay Park", 4, None).unwrap();
+
+        assert_eq!(arrival.route_id(), "");
+    }
+
+    #[test]
+    fn arrival_round_trips_through_postcard() {
+        let arrivals = [
+            Arrival::new("6", "Pelham Bay Park", 4, Some(-90)).unwrap(),
+            Arrival::new("GS", "Grand Central-42 St", 0, None).unwrap(),
+            // Multi-byte UTF-8 must survive decoding too.
+            Arrival::new("S1", "Köln Hbf", u16::MAX, Some(i16::MIN)).unwrap(),
+        ];
+
+        for arrival in arrivals {
+            let mut buf = [0u8; 256];
+            let encoded = postcard::to_slice(&arrival, &mut buf).unwrap();
+            let decoded: Arrival = postcard::from_bytes(encoded).unwrap();
+
+            assert_eq!(decoded, arrival);
+        }
+    }
 }
