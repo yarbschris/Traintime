@@ -56,7 +56,9 @@ impl Arrival {
         let mut route_id_string: String<MAX_ROUTE_ID_LEN> = String::new();
         route_id_string
             .push_str(route_id)
-            .map_err(|_| ArrivalError::RouteIdTooLong)?;
+            .map_err(|_| ArrivalError::RouteIdTooLong {
+                len: route_id.len(),
+            })?;
 
         // Truncate on a char boundary: push whole chars until one doesn't fit
         let mut headsign_string: String<MAX_HEADSIGN_LEN> = String::new();
@@ -112,7 +114,25 @@ impl Arrival {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ArrivalError {
     /// The route ID is longer than [`MAX_ROUTE_ID_LEN`] bytes.
-    RouteIdTooLong,
+    RouteIdTooLong {
+        /// The length in bytes of the rejected `route_id`
+        len: usize,
+    },
+}
+
+impl core::error::Error for ArrivalError {}
+
+impl core::fmt::Display for ArrivalError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ArrivalError::RouteIdTooLong { len } => {
+                write!(
+                    f,
+                    "route_id is {len} bytes, limit is {MAX_ROUTE_ID_LEN} bytes"
+                )
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -164,7 +184,12 @@ mod tests {
 
         let result = Arrival::new(&route_id, "Pelham Bay Park", 4, None);
 
-        assert_eq!(result, Err(ArrivalError::RouteIdTooLong));
+        assert_eq!(
+            result,
+            Err(ArrivalError::RouteIdTooLong {
+                len: route_id.len()
+            })
+        );
     }
 
     #[test]
