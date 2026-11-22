@@ -2,21 +2,37 @@ use crate::arrival::{ARRIVAL_MAX_ENCODED_LEN, Arrival};
 use heapless::Vec;
 use serde::{Deserialize, Serialize};
 
-/// Maximum number of arrivals
+/// Maximum number of arrivals in one frame.
 ///
-/// Sets max worst case wire time at ~60ms
-/// Transport limit, bumping this means bumping versions
+/// The list keeps the soonest arrivals and drops the rest. At this limit the
+/// worst-case payload is about 60 ms on the wire at 115200 baud.
+///
+/// A transport limit, not a display limit: changing it means bumping the
+/// protocol version.
 pub const MAX_ARRIVALS: usize = 8;
 const _: () = assert!(
     MAX_ARRIVALS < 128,
     "max arrivals length prefix must stay at 1 byte"
 );
 
-/// Vector of Arrivals, an empty vector means no trains
+/// Up to [`MAX_ARRIVALS`] arrivals, soonest first. An empty list means no
+/// trains.
+///
+/// On the wire it's the same as the list inside it: the wrapper keeps
+/// `heapless` out of the public API and costs no bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArrivalList(Vec<Arrival, MAX_ARRIVALS>);
 
 impl ArrivalList {
+    /// Builds a list from the first [`MAX_ARRIVALS`] arrivals and ignores the
+    /// rest.
+    ///
+    /// The caller must pass arrivals soonest first; the order isn't checked.
+    /// Pass an unsorted list and the wrong trains are dropped.
+    ///
+    /// Takes no more than [`MAX_ARRIVALS`] items from the iterator, so work
+    /// done lazily inside it (like converting server packets) stops once the
+    /// list is full.
     pub fn soonest(arrivals: impl IntoIterator<Item = Arrival>) -> Self {
         let arrivals = arrivals.into_iter().take(MAX_ARRIVALS);
         let mut arrival_list = ArrivalList(Vec::new());
@@ -30,12 +46,19 @@ impl ArrivalList {
         arrival_list
     }
 
+    /// The arrivals, soonest first.
     pub fn as_slice(&self) -> &[Arrival] {
         &self.0
     }
 }
 
-/// What the screen shows based on server status
+/// What the sign shows: one complete screen per frame.
+///
+/// The variant order is the order on the wire (each variant is sent as its
+/// position): reordering, adding or removing a variant means bumping the
+/// protocol version.
+///
+/// How the server's status maps onto it, decided in the sink:
 ///
 /// | `ServerStatus`           | `ClientDisplay`       |
 /// |--------------------------|-----------------------|
@@ -54,15 +77,18 @@ impl ArrivalList {
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientDisplay {
-    /// Waiting for user to select station
+    /// No transit system or no station is selected yet.
     WaitingForSelection,
-    /// Fetching or parsing static data
+    /// The server is starting, loading static data, or resolving the selected
+    /// station. Passes on its own.
     Loading,
-    /// Fetch failure
+    /// Every realtime endpoint failed on the last fetch, so no arrivals are
+    /// sent. Usually recovers on its own; if not, check the network.
     NetworkError,
-    /// Unknown station or no endpoints
+    /// The selected station is unknown or has no realtime endpoints. Doesn't
+    /// recover on its own: someone has to fix the selection.
     ConfigError,
-    /// Show next trains
+    /// The next trains, soonest first. An empty list means no trains.
     Arrivals(ArrivalList),
 }
 
@@ -84,10 +110,17 @@ pub const CLIENT_DISPLAY_MAX_ENCODED_LEN: usize =
 mod tests {
     use super::*;
 
-    // Builds a list directly through the private field. Switch to the public
-    // constructor once it exists.
+    // Goes through the public constructor, so every test below exercises it.
     fn list(arrivals: &[Arrival]) -> ArrivalList {
-        ArrivalList(arrivals.iter().cloned().collect())
+        ArrivalList::soonest(arrivals.iter().cloned())
+    }
+
+    fn due_in(minutes: u16) -> Arrival {
+        Arrival::new("6", "Pelham Bay Park", minutes, None).unwrap()
+    }
+
+    fn minutes_of(list: &ArrivalList) -> std::vec::Vec<u16> {
+        list.as_slice().iter().map(Arrival::minutes).collect()
     }
 
     fn encode(display: &ClientDisplay) -> std::vec::Vec<u8> {
@@ -97,6 +130,47 @@ mod tests {
 
     fn pelham() -> Arrival {
         Arrival::new("6", "Pelham Bay Park", 4, Some(-90)).unwrap()
+    }
+
+    #[test]
+    fn soonest_keeps_every_arrival_under_the_limit_in_order() {
+        let list = ArrivalList::soonest([due_in(2), due_in(5), due_in(9)]);
+
+        assert_eq!(minutes_of(&list), [2, 5, 9]);
+    }
+
+    #[test]
+    fn soonest_of_nothing_is_an_empty_list() {
+        let list = ArrivalList::soonest([]);
+
+        assert!(list.as_slice().is_empty());
+    }
+
+    #[test]
+    fn soonest_keeps_the_first_max_arrivals_in_order() {
+        let over_limit = (0..=MAX_ARRIVALS as u16).map(due_in);
+
+        let list = ArrivalList::soonest(over_limit);
+
+        let expected: std::vec::Vec<u16> = (0..MAX_ARRIVALS as u16).collect();
+        assert_eq!(minutes_of(&list), expected);
+    }
+
+    #[test]
+    fn soonest_pulls_no_more_than_max_arrivals_from_the_iterator() {
+        // The sink converts packets lazily inside the iterator, and a failed
+        // conversion logs a warning. Pulling a 9th item would convert (and
+        // maybe warn about) an arrival that can never be shown.
+        let mut pulled = 0;
+        let arrivals = (0..20).map(|minutes| {
+            pulled += 1;
+            due_in(minutes)
+        });
+
+        let list = ArrivalList::soonest(arrivals);
+
+        assert_eq!(list.as_slice().len(), MAX_ARRIVALS);
+        assert_eq!(pulled, MAX_ARRIVALS);
     }
 
     #[test]
