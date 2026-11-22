@@ -5,3 +5,4 @@
 )]
 pub mod arrival;
 pub mod client_display;
+mod crc;
