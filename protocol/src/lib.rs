@@ -4,3 +4,4 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 pub mod arrival;
+pub mod client_display;
