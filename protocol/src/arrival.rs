@@ -20,6 +20,20 @@ const _: () = assert!(
     "headsign length prefix must stay at 1 byte"
 );
 
+/// The largest an [`Arrival`] can be once encoded with postcard, in bytes.
+///
+/// Worked out from the wire format; a test encodes a worst-case arrival and
+/// checks this is exact.
+pub const ARRIVAL_MAX_ENCODED_LEN: usize =
+    // route_id: 1-byte length prefix + bytes
+    (1 + MAX_ROUTE_ID_LEN)
+    // headsign: 1-byte length prefix + bytes
+    + (1 + MAX_HEADSIGN_LEN)
+    // minutes: u16 varint, worst case 3 bytes
+    + 3
+    // delay: Some tag + zigzag i16 varint, worst case 3 bytes
+    + (1 + 3);
+
 /// One upcoming train at the selected station, as sent to the sign.
 ///
 /// The field order is the order on the wire: reordering, adding or removing
@@ -217,5 +231,48 @@ mod tests {
 
             assert_eq!(decoded, arrival);
         }
+    }
+
+    #[test]
+    fn worst_case_arrival_encodes_to_exactly_the_max_len() {
+        // Every field at its largest encoding. i16::MIN zigzags to 65535, the
+        // largest zigzag value, so it's the true worst case for `delay`.
+        let arrival = Arrival::new(
+            &"R".repeat(MAX_ROUTE_ID_LEN),
+            &"a".repeat(MAX_HEADSIGN_LEN),
+            u16::MAX,
+            Some(i16::MIN),
+        )
+        .unwrap();
+
+        let mut buf = [0u8; 256];
+        let encoded = postcard::to_slice(&arrival, &mut buf).unwrap();
+
+        // Equality, not <=: an overestimate is a wrong number too.
+        assert_eq!(encoded.len(), ARRIVAL_MAX_ENCODED_LEN);
+    }
+
+    #[test]
+    fn arrival_encodes_to_known_bytes() {
+        // Golden bytes, worked out by hand from the postcard wire format.
+        // Pins the field order and encodings: if this fails, the wire format
+        // changed, and the protocol version needs a bump.
+        let arrival = Arrival::new("6", "Pelham Bay Park", 4, Some(-90)).unwrap();
+
+        #[rustfmt::skip]
+        let expected = [
+            0x01, b'6',                         // route_id: len 1, "6"
+            0x0F,                               // headsign: len 15
+            b'P', b'e', b'l', b'h', b'a', b'm', b' ',
+            b'B', b'a', b'y', b' ',
+            b'P', b'a', b'r', b'k',
+            0x04,                               // minutes: 4
+            0x01, 0xB3, 0x01,                   // delay: Some, zigzag(-90) = 179
+        ];
+
+        let mut buf = [0u8; 256];
+        let encoded = postcard::to_slice(&arrival, &mut buf).unwrap();
+
+        assert_eq!(encoded, expected);
     }
 }
