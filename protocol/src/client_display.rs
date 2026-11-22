@@ -16,6 +16,25 @@ const _: () = assert!(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArrivalList(Vec<Arrival, MAX_ARRIVALS>);
 
+impl ArrivalList {
+    pub fn soonest(arrivals: impl IntoIterator<Item = Arrival>) -> Self {
+        let arrivals = arrivals.into_iter().take(MAX_ARRIVALS);
+        let mut arrival_list = ArrivalList(Vec::new());
+
+        for arrival in arrivals {
+            if arrival_list.0.push(arrival).is_err() {
+                break;
+            }
+        }
+
+        arrival_list
+    }
+
+    pub fn as_slice(&self) -> &[Arrival] {
+        &self.0
+    }
+}
+
 /// What the screen shows based on server status
 ///
 /// | `ServerStatus`           | `ClientDisplay`       |
