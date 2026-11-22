@@ -108,8 +108,10 @@ impl Arrival {
         &self.headsign
     }
 
-    /// Whole minutes until arrival, counted from when the frame was sent.
-    /// The sender saturates at `u16::MAX`.
+    /// Whole minutes until arrival, rounded down, counted from the realtime
+    /// feed's timestamp (not from when the frame was sent: the feed can
+    /// already be tens of seconds old by then). The sender saturates at
+    /// `u16::MAX`.
     pub fn minutes(&self) -> u16 {
         self.minutes
     }
