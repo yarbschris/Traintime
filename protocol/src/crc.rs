@@ -18,7 +18,7 @@
 
 /// Length of the CRC in bytes. How it's placed in a frame is described in
 /// [`crate::frame`].
-pub const CRC_LEN: usize = 4;
+pub const CRC_LEN: usize = core::mem::size_of::<u32>();
 
 const CRC_32_INITIAL_VALUE: u32 = 0xFFFFFFFF;
 const CRC_32_REVERSED_POLYNOMIAL: u32 = 0xEDB88320;

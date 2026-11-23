@@ -3,6 +3,7 @@
     not(test),
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
+mod crc;
+
 pub mod arrival;
 pub mod client_display;
-mod crc;
