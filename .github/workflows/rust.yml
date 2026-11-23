@@ -24,3 +24,17 @@ jobs:
       run: cargo clippy --all-targets --locked
     - name: Run tests
       run: cargo test --verbose --locked
+
+  # The protocol crate is shared with the Pico 2 firmware, so it must build
+  # without std. A host build doesn't prove that: a dependency with its std
+  # feature on still compiles there. Building for the RP2350's target does.
+  protocol-no-std:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install RP2350 target
+      run: rustup target add thumbv8m.main-none-eabihf
+    - name: Build protocol for RP2350
+      run: cargo build -p protocol --target thumbv8m.main-none-eabihf --verbose --locked
