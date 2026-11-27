@@ -1,3 +1,41 @@
+const ENCODING_BYTE: u8 = 0;
+
+// COBS decode buf in-place
+pub fn cobs_decode(buf: &mut [u8]) -> Option<usize> {
+    // A valid encoding has at least one byte
+    if buf.is_empty() {
+        return None;
+    }
+    let mut read: usize = 0;
+    let mut write: usize = 0;
+
+    while read < buf.len() {
+        let val_code_byte = *buf.get(read)?;
+        // Corrupt
+        if val_code_byte == 0 {
+            return None;
+        }
+        let next_code_byte_index = read + val_code_byte as usize;
+
+        // Corrupt
+        if (next_code_byte_index) > buf.len() {
+            return None;
+        }
+
+        buf.copy_within(read + 1..next_code_byte_index, write);
+        read = next_code_byte_index;
+        write += val_code_byte as usize - 1;
+
+        // We only add a `0x00` data byte if the next code byte was not overhead
+        // (a.k.a the previous code byte was not 255) and when we have not read the last block
+        if val_code_byte != 255 && read < buf.len() {
+            write = copy_byte(buf, ENCODING_BYTE, write)?;
+        }
+    }
+
+    Some(write)
+}
+
 // COBS encodes content of src into out
 pub fn cobs_encode(src: &[u8], out: &mut [u8]) -> Option<usize> {
     // Current index into out array
@@ -246,5 +284,179 @@ mod tests {
         let len = cobs_encode(&[0x11, 0x00], &mut out).unwrap();
         assert_eq!(&out[..len], [0x02, 0x11, 0x01, 0x00]);
         assert!(out[len..].iter().all(|&b| b == 0xAA));
+    }
+
+    // ---- Decoding ----
+
+    /// Decodes a copy of `frame` (no delimiter) and returns the decoded bytes.
+    fn decode(frame: &[u8]) -> Option<Vec<u8>> {
+        let mut buf = frame.to_vec();
+        let len = cobs_decode(&mut buf)?;
+        buf.truncate(len);
+        Some(buf)
+    }
+
+    /// Encodes `src`, strips the delimiter as the receiver would, decodes in
+    /// place, and checks the original comes back.
+    fn assert_round_trips(src: &[u8]) {
+        let encoded = encode(src);
+        let (_delimiter, frame) = encoded.split_last().unwrap();
+        assert_eq!(
+            decode(frame).as_deref(),
+            Some(src),
+            "round trip failed for {} input bytes",
+            src.len()
+        );
+    }
+
+    #[test]
+    fn decodes_short_known_frames() {
+        // The short Wikipedia examples again, delimiter removed.
+        let cases: &[(&[u8], &[u8])] = &[
+            (&[0x01], &[]),
+            (&[0x01, 0x01], &[0x00]),
+            (&[0x01, 0x01, 0x01], &[0x00, 0x00]),
+            (&[0x01, 0x02, 0x11, 0x01], &[0x00, 0x11, 0x00]),
+            (&[0x03, 0x11, 0x22, 0x02, 0x33], &[0x11, 0x22, 0x00, 0x33]),
+            (&[0x05, 0x11, 0x22, 0x33, 0x44], &[0x11, 0x22, 0x33, 0x44]),
+            (&[0x02, 0x11, 0x01, 0x01, 0x01], &[0x11, 0x00, 0x00, 0x00]),
+        ];
+        for (frame, expected) in cases {
+            assert_eq!(
+                decode(frame).as_deref(),
+                Some(*expected),
+                "frame {frame:02X?}"
+            );
+        }
+    }
+
+    #[test]
+    fn full_last_block_has_no_trailing_zero() {
+        // 0xFF block that is also the last block: neither condition implies a zero.
+        let frame: Vec<u8> = once(0xFF).chain(0x01..=0xFE).collect();
+        let expected: Vec<u8> = (0x01..=0xFE).collect();
+        assert_eq!(decode(&frame), Some(expected));
+    }
+
+    #[test]
+    fn full_block_in_the_middle_has_no_implied_zero() {
+        let frame: Vec<u8> = once(0xFF).chain(0x01..=0xFE).chain([0x02, 0xFF]).collect();
+        let expected: Vec<u8> = (0x01..=0xFF).collect();
+        assert_eq!(decode(&frame), Some(expected));
+    }
+
+    #[test]
+    fn zero_after_a_full_block_is_decoded() {
+        let frame: Vec<u8> = once(0xFF).chain(0x02..=0xFF).chain([0x01, 0x01]).collect();
+        let expected: Vec<u8> = (0x02..=0xFF).chain(once(0x00)).collect();
+        assert_eq!(decode(&frame), Some(expected));
+    }
+
+    #[test]
+    fn round_trips_every_encoder_example() {
+        assert_round_trips(&[]);
+        assert_round_trips(&[0x00]);
+        assert_round_trips(&[0x00, 0x00]);
+        assert_round_trips(&[0x00, 0x11, 0x00]);
+        assert_round_trips(&[0x11, 0x22, 0x00, 0x33]);
+        assert_round_trips(&[0x11, 0x22, 0x33, 0x44]);
+        assert_round_trips(&[0x11, 0x00, 0x00, 0x00]);
+        assert_round_trips(&(0x01..=0xFE).collect::<Vec<u8>>());
+        assert_round_trips(&(0x00..=0xFE).collect::<Vec<u8>>());
+        assert_round_trips(&(0x01..=0xFF).collect::<Vec<u8>>());
+        assert_round_trips(&(0x02..=0xFF).chain(once(0x00)).collect::<Vec<u8>>());
+        assert_round_trips(&(0x03..=0xFF).chain([0x00, 0x01]).collect::<Vec<u8>>());
+    }
+
+    #[test]
+    fn round_trips_non_zero_runs_of_every_length() {
+        // Hits every position relative to the 254-byte block boundary.
+        for n in 0..=1024 {
+            assert_round_trips(&vec![0x01; n]);
+        }
+    }
+
+    #[test]
+    fn round_trips_zero_runs_of_every_length() {
+        for n in 0..=600 {
+            assert_round_trips(&vec![0x00; n]);
+        }
+    }
+
+    #[test]
+    fn round_trips_mixed_data() {
+        // Deterministic pseudo-random bytes with roughly 1 in 8 zeros, so
+        // blocks of all sizes show up, including some full ones.
+        let mut state: u32 = 0x1234_5678;
+        let mut next = || {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (state >> 24) as u8
+        };
+        for len in [1, 2, 253, 254, 255, 256, 508, 509, 1000, 2048] {
+            let src: Vec<u8> = (0..len)
+                .map(|_| {
+                    let b = next();
+                    if b < 32 { 0x00 } else { b }
+                })
+                .collect();
+            assert_round_trips(&src);
+        }
+        // Long runs without zeros, cut by occasional ones.
+        let src: Vec<u8> = (0..2048u32)
+            .map(|i| if i % 600 == 0 { 0 } else { 0xAB })
+            .collect();
+        assert_round_trips(&src);
+    }
+
+    #[test]
+    fn decoded_data_is_at_the_front_of_the_buffer() {
+        let mut buf = [0x03, 0x11, 0x22, 0x02, 0x33];
+        let len = cobs_decode(&mut buf).unwrap();
+        assert_eq!(&buf[..len], [0x11, 0x22, 0x00, 0x33]);
+    }
+
+    #[test]
+    fn empty_frame_is_corrupt() {
+        // Every valid encoding has at least one code byte, so an empty frame
+        // (two delimiters back to back on the wire) can't be valid.
+        assert_eq!(cobs_decode(&mut []), None);
+    }
+
+    #[test]
+    fn zero_code_byte_is_corrupt() {
+        assert_eq!(decode(&[0x00]), None);
+        assert_eq!(decode(&[0x00, 0x11, 0x22]), None);
+    }
+
+    #[test]
+    fn zero_code_byte_after_the_first_block_is_corrupt() {
+        assert_eq!(decode(&[0x02, 0x11, 0x00, 0x33]), None);
+    }
+
+    #[test]
+    fn code_byte_overrunning_the_frame_is_corrupt() {
+        assert_eq!(decode(&[0x05, 0x11, 0x22]), None);
+        assert_eq!(decode(&[0xFF]), None);
+    }
+
+    #[test]
+    fn later_code_byte_overrunning_the_frame_is_corrupt() {
+        // First block is fine; the second claims more bytes than remain.
+        assert_eq!(decode(&[0x02, 0x11, 0x04, 0x22]), None);
+    }
+
+    #[test]
+    fn truncated_frame_is_corrupt() {
+        // A frame that lost its tail on the wire, e.g. dropped UART bytes.
+        let encoded = encode(&(0x01..=0xFF).collect::<Vec<u8>>());
+        let frame = &encoded[..encoded.len() - 1];
+        for cut in 1..frame.len() {
+            // Only cuts inside a block are detectable; a cut exactly at a
+            // block boundary is a valid shorter frame and is the CRC's job.
+            if cut == 255 {
+                continue;
+            }
+            assert_eq!(decode(&frame[..cut]), None, "cut at {cut} not detected");
+        }
     }
 }
