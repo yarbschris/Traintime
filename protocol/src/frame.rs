@@ -1,16 +1,17 @@
 use crate::{
     client_display::{CLIENT_DISPLAY_MAX_ENCODED_LEN, ClientDisplay},
-    cobs::cobs_encode,
+    cobs::{cobs_encode, max_encoded_len},
     crc::{CRC_LEN, crc32},
 };
 
 const VERSION_LEN: usize = 1;
 
 const UNENCODED_MAX_LEN: usize = VERSION_LEN + CLIENT_DISPLAY_MAX_ENCODED_LEN + CRC_LEN;
+/// Maximum number of bytes on wire: a COBS-encoded `[Version][ClientDisplay][CRC]`
+/// frame plus its `00` delimiter
+pub const MAX_BYTES_ON_WIRE: usize = max_encoded_len(UNENCODED_MAX_LEN);
 /// Maximum length of a frame of `[Version][ClientDisplay][CRC]`, excludes `00` delimiter
-pub const MAX_FRAME_LEN: usize = UNENCODED_MAX_LEN + UNENCODED_MAX_LEN.div_ceil(254);
-/// Maximum number of bytes on wire: MAX_FRAME_LEN + `00` delimiter
-pub const MAX_BYTES_ON_WIRE: usize = MAX_FRAME_LEN + 1;
+pub const MAX_FRAME_LEN: usize = MAX_BYTES_ON_WIRE - 1;
 /// First byte of a frame, encodes the frame version. Frames with unrecognized version are dropped.
 /// Bumped on breaking changes.
 pub const VERSION_BYTE: u8 = 1;
@@ -52,9 +53,9 @@ pub fn encode<'a>(
     filled += CRC_LEN;
 
     // COBS encode should never fail when UNENCODED_MAX_LEN and MAX_BYTES_ON_WIRE are calculated correctly
-    let len = cobs_encode(&scratch[..filled], out).ok_or(EncodeError::IncorrectConstants)?;
+    let encoded = cobs_encode(&scratch[..filled], out).ok_or(EncodeError::IncorrectConstants)?;
 
-    out.get(..len).ok_or(EncodeError::IncorrectConstants)
+    Ok(encoded)
 }
 
 /// Why a frame couldn't be encoded
