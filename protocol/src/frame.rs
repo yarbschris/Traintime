@@ -51,6 +51,7 @@ pub fn encode<'a>(
         .copy_from_slice(&crc_bytes);
     filled += CRC_LEN;
 
+    // COBS encode should never fail when UNENCODED_MAX_LEN and MAX_BYTES_ON_WIRE are calculated correctly
     let len = cobs_encode(&scratch[..filled], out).ok_or(EncodeError::IncorrectConstants)?;
 
     out.get(..len).ok_or(EncodeError::IncorrectConstants)
